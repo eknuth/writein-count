@@ -22,18 +22,19 @@ from . import db
 from .common import load_gray, ocr_tsv, ocr_text
 from .config import CONFIG
 
-DARK = 110              # grayscale threshold for "ink" (used by stage 3 too)
-LINE_DARK = 140         # looser threshold for the faint printed underline
-LINE_GAP = 8            # px: bridge anti-aliasing breaks in the underline
-MIN_LINE_RUN = 110      # px: min (bridged) run to count as the underline
-MAX_LINE_FRAC = 0.85    # runs longer than this fraction of column width are borders
+# Detection geometry (see config.py [locate]); tuned to Clear Ballot scans.
+DARK = CONFIG.locate.dark              # grayscale threshold for "ink" (used by stage 3 too)
+LINE_DARK = CONFIG.locate.line_dark    # looser threshold for the faint printed underline
+LINE_GAP = CONFIG.locate.line_gap      # px: bridge anti-aliasing breaks in the underline
+MIN_LINE_RUN = CONFIG.locate.min_line_run    # px: min (bridged) run to count as the underline
+MAX_LINE_FRAC = CONFIG.locate.max_line_frac  # runs longer than this fraction of column width are borders
 # A contest-box bottom separator is a long run flush to the box's LEFT edge. The
 # left-edge test (start <= MIN_INDENT) is what separates it from the indented
 # write-in underline, so the length threshold can sit below MAX_LINE_FRAC.
-BORDER_FRAC = 0.80
-MIN_INDENT = 70         # px: the write-in underline starts right of the oval
-COL_W_FRAC = 0.22       # column width as fraction of page width
-SEARCH_FRAC = 0.34      # how far below Governor to search for its write-in line
+BORDER_FRAC = CONFIG.locate.border_frac
+MIN_INDENT = CONFIG.locate.min_indent  # px: the write-in underline starts right of the oval
+COL_W_FRAC = CONFIG.locate.col_w_frac  # column width as fraction of page width
+SEARCH_FRAC = CONFIG.locate.search_frac  # how far below the header to search for its write-in line
 
 
 def find_governor(rows: list[dict]):
@@ -185,9 +186,11 @@ def locate(img, rows: list[dict] | None = None) -> dict | None:
 
     # Vision crop: oval + handwriting + line + label (a bit of the last candidate
     # row above is harmless; the model is told to read only the write-in line).
-    region_px = (cx0, ly - 60, cx1, ly + 26)
+    lc = CONFIG.locate
+    region_px = (cx0, ly - lc.region_top_off, cx1, ly + lc.region_bot_off)
     # Oval sits just left of the line start, vertically centered on the line.
-    oval_px = (lxs - 54, ly - 30, lxs - 2, ly + 6)
+    oval_px = (lxs - lc.oval_left_off, ly - lc.oval_top_off,
+               lxs - lc.oval_right_off, ly + lc.oval_bot_off)
 
     def rel(box):
         return (box[0] / W, box[1] / H, box[2] / W, box[3] / H)

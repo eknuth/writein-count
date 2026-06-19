@@ -36,8 +36,8 @@ MIN_SAMPLES = CONFIG.mark.min_samples
 BASELINE_PCTL = CONFIG.mark.baseline_pctl  # robust "blank" level even if many ballots are written-in
 # Handwriting band height above the printed underline. Kept tight so the printed
 # candidate name above the line does not leak in (it sits higher up).
-HAND_BAND_TOP = 32
-HAND_BAND_BOT = 4
+HAND_BAND_TOP = CONFIG.mark.hand_band_top
+HAND_BAND_BOT = CONFIG.mark.hand_band_bot
 
 
 def _abs(box_rel, w, h):

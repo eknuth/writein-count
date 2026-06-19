@@ -45,6 +45,37 @@ model = "gemma4:12b"
 temperature = 0.0
 read_workers = 4    # concurrent in-flight requests to the local model
 
+# ---- Ballot geometry (stages 1-3) ----
+# These are tuned to Clear Ballot scans. Retune them to port the pipeline to a
+# different scanner/county whose ballots place the contest and write-in line
+# differently. Bands are page fractions [x0, y0, x1, y1]; pixel values assume the
+# scanner's native scan resolution.
+
+[classify]
+header_band = [0.0, 0.0, 1.0, 0.13]   # top band OCR'd for title/party/style
+style_band = [0.62, 0.0, 1.0, 0.06]   # top-right band holding the style code
+style_regex = '\b(\d{4}-\d{1,2}(?:-[A-Z]{1,3})?)\b'  # e.g. 4303-1-WS
+numeric_regex = '(\d{4}-\d{1,2})'     # layout key prefix, suffix dropped
+target_card_max_h = 2450              # px: separator/target cards are shorter
+
+[locate]
+dark = 110            # grayscale ink threshold (0-255)
+line_dark = 140       # looser threshold for the faint printed underline
+line_gap = 8          # px: bridge anti-aliasing breaks in the underline
+min_line_run = 110    # px: min run length to count as the underline
+max_line_frac = 0.85  # runs longer than this fraction of column width are borders
+border_frac = 0.80    # a contest-box bottom separator run length fraction
+min_indent = 70       # px: the write-in underline starts right of the oval
+col_w_frac = 0.22     # contest column width as a fraction of page width
+search_frac = 0.34    # how far below the header to search for the write-in line
+# Vision-crop offsets (px) from the detected line y / column x.
+region_top_off = 60
+region_bot_off = 26
+oval_left_off = 54
+oval_top_off = 30
+oval_right_off = 2
+oval_bot_off = 6
+
 [mark]
 # Mark-detection thresholds in dark-ratio units (stage 3). Margins sit above the
 # per-layout blank baseline; absolutes are the fallback for sparse layouts.
@@ -54,6 +85,8 @@ oval_abs = 0.18
 line_abs = 0.11
 min_samples = 8
 baseline_pctl = 30
+hand_band_top = 32    # px: handwriting band height above the underline
+hand_band_bot = 4     # px: lower edge of that band above the underline
 
 [filename]
 # Regex with named groups `box` and `seq` matched against each image filename,

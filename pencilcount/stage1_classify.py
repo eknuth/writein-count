@@ -18,14 +18,14 @@ from .common import load_gray, ocr_text
 from .config import CONFIG
 
 # Header band = top fraction of the page (where the title/party/style live).
-HEADER_BAND = (0.0, 0.0, 1.0, 0.13)
+HEADER_BAND = CONFIG.classify.header_band
 # Style code is printed in the top-right corner of ballot cards.
-STYLE_BAND = (0.62, 0.0, 1.0, 0.06)
+STYLE_BAND = CONFIG.classify.style_band
 
 # Ballot style code, e.g. 4303-1-WS, 4604-2-YS. Also matches bottom form codes.
-STYLE_RE = re.compile(r"\b(\d{4}-\d{1,2}(?:-[A-Z]{1,3})?)\b")
+STYLE_RE = re.compile(CONFIG.classify.style_regex)
 # Numeric prefix (precinct/style), suffix dropped: 5006-1-ZS -> 5006-1.
-NUMERIC_RE = re.compile(r"(\d{4}-\d{1,2})")
+NUMERIC_RE = re.compile(CONFIG.classify.numeric_regex)
 
 
 def layout_key(party: str | None, style: str | None) -> str | None:
@@ -40,7 +40,7 @@ def layout_key(party: str | None, style: str | None) -> str | None:
     return f"{party or 'other'}|{m.group(1)}"
 
 # Target cards are notably shorter than ballot cards.
-TARGET_CARD_MAX_H = 2450
+TARGET_CARD_MAX_H = CONFIG.classify.target_card_max_h
 
 
 def _find_style(*texts) -> str | None:

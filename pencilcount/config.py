@@ -84,6 +84,39 @@ class VisionCfg:
 
 
 @dataclass(frozen=True)
+class ClassifyCfg:
+    # OCR bands as page fractions (x0, y0, x1, y1).
+    header_band: tuple[float, float, float, float] = (0.0, 0.0, 1.0, 0.13)
+    style_band: tuple[float, float, float, float] = (0.62, 0.0, 1.0, 0.06)
+    # Ballot-style code, e.g. 4303-1-WS, and its numeric prefix (suffix dropped).
+    style_regex: str = r"\b(\d{4}-\d{1,2}(?:-[A-Z]{1,3})?)\b"
+    numeric_regex: str = r"(\d{4}-\d{1,2})"
+    # Target/separator cards are shorter than ballot cards (pixels).
+    target_card_max_h: int = 2450
+
+
+@dataclass(frozen=True)
+class LocateCfg:
+    # Grayscale ink thresholds (0-255): general ink and the fainter printed line.
+    dark: int = 110
+    line_dark: int = 140
+    line_gap: int = 8          # px: bridge anti-aliasing breaks in the underline
+    min_line_run: int = 110    # px: min (bridged) run to count as the underline
+    max_line_frac: float = 0.85  # runs longer than this fraction of column width are borders
+    border_frac: float = 0.80    # a box bottom-separator run, flush to the left edge
+    min_indent: int = 70         # px: the write-in underline starts right of the oval
+    col_w_frac: float = 0.22     # column width as a fraction of page width
+    search_frac: float = 0.34    # how far below the contest header to search for its line
+    # Vision-crop offsets (px) from the detected line y / column x.
+    region_top_off: int = 60
+    region_bot_off: int = 26
+    oval_left_off: int = 54
+    oval_top_off: int = 30
+    oval_right_off: int = 2
+    oval_bot_off: int = 6
+
+
+@dataclass(frozen=True)
 class MarkCfg:
     # Margins above the per-layout blank baseline (dark-ratio units).
     oval_margin: float = 0.12
@@ -93,6 +126,10 @@ class MarkCfg:
     line_abs: float = 0.11
     min_samples: int = 8
     baseline_pctl: int = 30
+    # Handwriting band height above the printed underline (px); kept tight so the
+    # printed candidate name above the line does not leak in.
+    hand_band_top: int = 32
+    hand_band_bot: int = 4
 
 
 @dataclass(frozen=True)
@@ -129,6 +166,8 @@ class Config:
     candidates: list[CandidateCfg] = field(default_factory=_default_candidates)
     target: TargetCfg = field(default_factory=TargetCfg)
     vision: VisionCfg = field(default_factory=VisionCfg)
+    classify: ClassifyCfg = field(default_factory=ClassifyCfg)
+    locate: LocateCfg = field(default_factory=LocateCfg)
     mark: MarkCfg = field(default_factory=MarkCfg)
     filename: FilenameCfg = field(default_factory=FilenameCfg)
 
@@ -187,6 +226,11 @@ def load_config(path: Path | None = None) -> Config:
     if rw:
         vision = replace(vision, read_workers=int(rw))
 
+    # OCR bands arrive from TOML as lists; the stages expect 4-tuples.
+    classify = sub("classify", cfg.classify)
+    classify = replace(classify, header_band=tuple(classify.header_band),
+                       style_band=tuple(classify.style_band))
+
     return Config(
         images_root=Path(images_root),
         contest=contest,
@@ -194,6 +238,8 @@ def load_config(path: Path | None = None) -> Config:
         candidates=candidates,
         target=sub("target", cfg.target),
         vision=vision,
+        classify=classify,
+        locate=sub("locate", cfg.locate),
         mark=sub("mark", cfg.mark),
         filename=sub("filename", cfg.filename),
     )

@@ -1,0 +1,101 @@
+# Example config: the "Pencil" Governor write-in count, Multnomah County 2026 primary.
+#
+# This file reproduces the original run. Copy it to ./writein.toml (or point
+# $WRITEIN_CONFIG at it) and edit for a different contest, term, or scanner.
+# Any key you omit falls back to the built-in default in pencilcount/config.py.
+
+# Root of the scanned ballot image tree (box dirs live directly under it).
+# Override at runtime with $PENCIL_IMAGES_ROOT or $WRITEIN_IMAGES_ROOT.
+images_root = "/Volumes/storage/pencil/BallotImages20260519Primary"
+
+[contest]
+# Display name (used in the vision prompt and reports).
+name = "Governor"
+# Lowercased prefix of the contest header OCR token (stage 2 anchor).
+header_token = "govern"
+# Lowercased phrases that identify a ballot *front* (stage 1 funnel gate).
+front_markers = ["nominating ballot", "official primary"]
+# Lowercased exact token that begins the next contest below (stage 2 lower bound).
+next_contest_token = "vote"
+
+# Parties printed on the ballot header. `label` is stored in the DB; `match` is
+# the lowercased substring searched for in the header OCR. Anything unmatched on
+# a front is recorded as "other" and excluded from the partisan tally.
+[[parties]]
+label = "Democratic"
+match = "democratic"
+
+[[parties]]
+label = "Republican"
+match = "republican"
+
+[target]
+# The write-in term being counted (the headline deliverable).
+term = "pencil"
+strict = 0.84       # >= this fuzzy score -> counted as the target
+review_low = 0.60   # [review_low, strict) -> human review queue
+low_conf = 0.45     # vision confidence below this -> review even if score is high
+canon_strict = 0.84 # whole-string fuzzy threshold to fold a read onto a known name
+surname_fuzz = 0.80 # per-token fuzzy threshold against a surname alias
+min_alias = 5       # only fuzzy/substring-match aliases at least this long
+
+[vision]
+url = "http://localhost:11434/api/generate"
+model = "gemma4:12b"
+temperature = 0.0
+read_workers = 4    # concurrent in-flight requests to the local model
+
+[mark]
+# Mark-detection thresholds in dark-ratio units (stage 3). Margins sit above the
+# per-layout blank baseline; absolutes are the fallback for sparse layouts.
+oval_margin = 0.12
+line_margin = 0.07
+oval_abs = 0.18
+line_abs = 0.11
+min_samples = 8
+baseline_pctl = 30
+
+[filename]
+# Regex with named groups `box` and `seq` matched against each image filename,
+# and the box-directory prefix scanned under images_root.
+pattern = '(?P<box>AB-\d+)\+(?P<seq>\d+)\.jpe?g$'
+box_prefix = "AB-"
+
+# Known candidates to fold near-identical reads onto, so OCR/handwriting noise
+# doesn't fragment one person into dozens of spellings. `aliases` lists the full
+# name plus the surname (the surname catches garbled reads like "c drazen").
+[[candidates]]
+name = "pencil"
+aliases = ["pencil"]
+
+[[candidates]]
+name = "christine drazan"
+aliases = ["christine drazan", "drazan"]
+
+[[candidates]]
+name = "chris dudley"
+aliases = ["chris dudley", "dudley"]
+
+[[candidates]]
+name = "ed diehl"
+aliases = ["ed diehl", "diehl"]
+
+[[candidates]]
+name = "tina kotek"
+aliases = ["tina kotek", "kotek"]
+
+[[candidates]]
+name = "nick kristof"
+aliases = ["nick kristof", "nicholas kristof", "kristof"]
+
+[[candidates]]
+name = "erin lagesen"
+aliases = ["erin lagesen", "erin c lagesen", "lagesen"]
+
+[[candidates]]
+name = "dan rayfield"
+aliases = ["dan rayfield", "rayfield"]
+
+[[candidates]]
+name = "betsy johnson"
+aliases = ["betsy johnson"]

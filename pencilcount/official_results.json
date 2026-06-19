@@ -1,0 +1,10 @@
+{
+  "_comment": "Official Multnomah County write-in aggregates for the Governor primary, used by reconcile.py to catch coverage holes / systematic misses. The Secretary of State portal publishes only the aggregate Write-in count per contest (no names); these are the per-precinct Write-in lines summed across all 107/107 Multnomah precincts.",
+  "source": "https://results.oregonvotes.gov (Multnomah County, Governor, 107/107 precincts reported)",
+  "as_of": "2026-06-18",
+  "status": "unofficial",
+  "contests": {
+    "Democratic": { "writein_total": 3371 },
+    "Republican": { "writein_total": 163 }
+  }
+}

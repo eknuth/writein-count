@@ -1,0 +1,33 @@
+# ---- Ballot data and artifacts: NEVER commit (code-only repo) ----
+# The SQLite database holds every per-ballot transcript and score.
+tally.db
+tally.db.*
+*.db
+*.db-wal
+*.db-shm
+# Cropped write-in line images.
+crops/
+# Generated report assets (manifest + gallery crops embed real reads).
+report_assets/
+# Per-ballot exports and the rendered reports.
+*.csv
+*.pdf
+*.html
+run.log
+
+# ---- Local config (copy examples/.../config.toml to here and edit) ----
+writein.toml
+
+# ---- Legacy report generators (superseded by build_report_v2.py) ----
+pencilcount/build_report.py
+pencilcount/report.py
+
+# ---- Tooling / OS ----
+__pycache__/
+*.py[cod]
+.wrangler/
+.claude/
+.DS_Store
+.venv/
+venv/
+*.egg-info/

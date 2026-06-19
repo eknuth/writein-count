@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "writein-count"
+version = "0.1.0"
+description = "Configurable pipeline to tally handwritten ballot write-ins from scanned images using a local vision model"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [{ name = "Edwin Knuth" }]
+keywords = ["elections", "ocr", "ballots", "write-in", "vision", "ollama"]
+dependencies = ["pillow>=10.0", "numpy>=1.24"]
+
+[project.urls]
+Homepage = "https://github.com/eknuth/writein-count"
+
+[tool.setuptools]
+packages = ["pencilcount"]

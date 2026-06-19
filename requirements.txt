@@ -1,0 +1,11 @@
+# Python dependencies for the write-in tally pipeline.
+# Vision reads (stage 4) call a local Ollama server over HTTP via the stdlib,
+# so Ollama itself is a runtime dependency, not a pip package. Install it
+# separately (https://ollama.com) and pull a vision model, e.g.:
+#   ollama pull gemma4:12b
+# OCR (stages 1-2) shells out to the Tesseract CLI, also installed separately:
+#   macOS:  brew install tesseract
+#   Debian: apt-get install tesseract-ocr
+
+pillow>=10.0
+numpy>=1.24

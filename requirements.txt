@@ -9,3 +9,11 @@
 
 pillow>=10.0
 numpy>=1.24
+
+# Optional: OpenTelemetry instrumentation (see [telemetry] in config). The
+# pipeline runs fine without these; telemetry just becomes a no-op. Install with
+#   pip install -e ".[telemetry]"
+# or uncomment:
+# opentelemetry-api>=1.20
+# opentelemetry-sdk>=1.20
+# opentelemetry-exporter-otlp-proto-http>=1.20

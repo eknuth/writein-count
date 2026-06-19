@@ -9,9 +9,11 @@ from __future__ import annotations
 
 import base64
 import json
+import time
 import urllib.request
 
 from . import db
+from . import telemetry as tel
 from .config import CONFIG
 
 OLLAMA_URL = CONFIG.vision.url
@@ -35,8 +37,13 @@ def read_crop(crop_path: str, timeout: float = 180.0) -> dict:
         OLLAMA_URL, data=json.dumps(payload).encode("utf-8"),
         headers={"Content-Type": "application/json"},
     )
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        body = json.loads(resp.read().decode("utf-8"))
+    # Time only the model call, and track how many reads are in flight at once
+    # (the network-bound concurrency the read phase overlaps on a thread pool).
+    with tel.inflight():
+        t0 = time.perf_counter()
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            body = json.loads(resp.read().decode("utf-8"))
+        tel.record_vision_latency((time.perf_counter() - t0) * 1000.0, model=MODEL)
     raw = body.get("response", "").strip()
     try:
         obj = json.loads(raw)

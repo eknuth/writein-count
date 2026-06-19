@@ -88,6 +88,23 @@ baseline_pctl = 30
 hand_band_top = 32    # px: handwriting band height above the underline
 hand_band_bot = 4     # px: lower edge of that band above the underline
 
+[telemetry]
+# OpenTelemetry instrumentation, off by default. Requires the optional deps
+# (pip install -e ".[telemetry]"); otherwise it is a graceful no-op. Quick on:
+# WRITEIN_TELEMETRY=1. Metrics: vision read latency, per-stage duration and
+# throughput, funnel counts, layout-cache hit/miss, in-flight vision concurrency.
+enabled = false
+service_name = "writein-count"
+otlp = true          # export over OTLP/HTTP (SigNoz collector, etc.)
+console = false      # also print metrics/spans to stdout
+# Base OTLP URL; the signal paths /v1/metrics and /v1/traces are appended.
+# Falls back to $OTEL_EXPORTER_OTLP_ENDPOINT. For a local SigNoz: http://localhost:4318
+endpoint = ""
+# "key=value,key2=value2"; falls back to $OTEL_EXPORTER_OTLP_HEADERS.
+# SigNoz Cloud needs: signoz-access-token=<token>
+headers = ""
+export_interval_ms = 5000
+
 [filename]
 # Regex with named groups `box` and `seq` matched against each image filename,
 # and the box-directory prefix scanned under images_root.

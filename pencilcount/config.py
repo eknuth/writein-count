@@ -133,6 +133,19 @@ class MarkCfg:
 
 
 @dataclass(frozen=True)
+class TelemetryCfg:
+    # Off by default; the pipeline runs identically with telemetry disabled or
+    # opentelemetry not installed. Flip on via config or WRITEIN_TELEMETRY=1.
+    enabled: bool = False
+    service_name: str = "writein-count"
+    otlp: bool = True          # export over OTLP/HTTP (SigNoz, collectors, etc.)
+    console: bool = False      # also print metrics/spans to stdout
+    endpoint: str = ""         # base OTLP URL; falls back to OTEL_EXPORTER_OTLP_ENDPOINT
+    headers: str = ""          # "k=v,k2=v2"; falls back to OTEL_EXPORTER_OTLP_HEADERS
+    export_interval_ms: int = 5000
+
+
+@dataclass(frozen=True)
 class FilenameCfg:
     # Regex with named groups `box` and `seq` matched against the image filename.
     pattern: str = r"(?P<box>AB-\d+)\+(?P<seq>\d+)\.jpe?g$"
@@ -169,6 +182,7 @@ class Config:
     classify: ClassifyCfg = field(default_factory=ClassifyCfg)
     locate: LocateCfg = field(default_factory=LocateCfg)
     mark: MarkCfg = field(default_factory=MarkCfg)
+    telemetry: TelemetryCfg = field(default_factory=TelemetryCfg)
     filename: FilenameCfg = field(default_factory=FilenameCfg)
 
     @property
@@ -231,6 +245,10 @@ def load_config(path: Path | None = None) -> Config:
     classify = replace(classify, header_band=tuple(classify.header_band),
                        style_band=tuple(classify.style_band))
 
+    telemetry = sub("telemetry", cfg.telemetry)
+    if os.environ.get("WRITEIN_TELEMETRY", "").lower() in ("1", "true", "yes"):
+        telemetry = replace(telemetry, enabled=True)
+
     return Config(
         images_root=Path(images_root),
         contest=contest,
@@ -241,6 +259,7 @@ def load_config(path: Path | None = None) -> Config:
         classify=classify,
         locate=sub("locate", cfg.locate),
         mark=sub("mark", cfg.mark),
+        telemetry=telemetry,
         filename=sub("filename", cfg.filename),
     )
 

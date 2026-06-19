@@ -21,6 +21,7 @@ import os
 from . import db
 from .common import load_gray
 from .config import CONFIG
+from . import telemetry as tel
 from . import stage1_classify, stage2_locate, stage3_mark, stage4_read, stage5_match
 
 N_CPU = max(1, (os.cpu_count() or 4) - 2)
@@ -67,18 +68,20 @@ def phase_classify(conn, box, limit, pool):
     if not rows:
         return
     print(f"[classify] {len(rows)} pages on {N_CPU} workers")
-    n = 0
-    for kind, path, payload in pool.imap_unordered(_w_classify, [r["path"] for r in rows], chunksize=8):
-        if kind == "err":
-            db.set_status(conn, path, db.ERROR, err=payload)
-        else:
-            status = payload.pop("status")
-            db.set_status(conn, path, status, **payload)
-        n += 1
-        if n % 500 == 0:
-            conn.commit()
-            print(f"  classified {n}/{len(rows)}")
-    conn.commit()
+    with tel.stage_timer("classify"):
+        n = 0
+        for kind, path, payload in pool.imap_unordered(_w_classify, [r["path"] for r in rows], chunksize=8):
+            if kind == "err":
+                db.set_status(conn, path, db.ERROR, err=payload)
+            else:
+                status = payload.pop("status")
+                db.set_status(conn, path, status, **payload)
+            n += 1
+            if n % 500 == 0:
+                conn.commit()
+                print(f"  classified {n}/{len(rows)}")
+        conn.commit()
+    tel.add_images("classify", len(rows))
 
 
 LOCATE_TRIES = 6  # samples to try per layout until one validates
@@ -100,38 +103,44 @@ def phase_locate(conn, box, limit):
         if r["layout"] is not None:
             samples.setdefault(r["layout"], []).append(r["path"])
     print(f"[locate] {len(samples)} distinct layouts among {len(rows)} fronts")
-    invalid = []
-    for layout, paths in samples.items():
-        if db.get_region(conn, layout) is not None:
-            continue
-        best = None
-        for sp in paths[:LOCATE_TRIES]:
-            try:
-                loc = stage2_locate.locate(load_gray(sp))
-            except Exception:  # noqa: BLE001
-                loc = None
-            if loc is None:
+    with tel.stage_timer("locate"):
+        invalid = []
+        for layout, paths in samples.items():
+            if db.get_region(conn, layout) is not None:
+                # Region already solved for this layout: the locate-once cache pays
+                # off here, skipping OCR for every later ballot of the same style.
+                tel.add_cache("hit", len(paths))
                 continue
-            best = (loc, sp)
-            if loc["valid"]:
-                break
-        if best is None:
-            print(f"  layout {layout!r}: no governor/line -> fronts skipped")
-            continue
-        loc, sp = best
-        db.save_region(conn, layout, loc["region_rel"], loc["oval_rel"],
-                       sp, valid=int(loc["valid"]))
-        if not loc["valid"]:
-            invalid.append(layout)
-    conn.commit()
-    if invalid:
-        print(f"  [WARN] {len(invalid)} layouts never validated (flagged for review): {invalid}")
-    for r in rows:
-        if r["layout"] is not None and db.get_region(conn, r["layout"]) is not None:
-            db.set_status(conn, r["path"], db.LOCATED)
-        else:
-            db.set_status(conn, r["path"], db.SKIP_NO_GOVERNOR, err="no region for layout")
-    conn.commit()
+            tel.add_cache("miss")
+            best = None
+            for sp in paths[:LOCATE_TRIES]:
+                try:
+                    loc = stage2_locate.locate(load_gray(sp))
+                except Exception:  # noqa: BLE001
+                    loc = None
+                if loc is None:
+                    continue
+                best = (loc, sp)
+                if loc["valid"]:
+                    break
+            if best is None:
+                print(f"  layout {layout!r}: no governor/line -> fronts skipped")
+                continue
+            loc, sp = best
+            db.save_region(conn, layout, loc["region_rel"], loc["oval_rel"],
+                           sp, valid=int(loc["valid"]))
+            if not loc["valid"]:
+                invalid.append(layout)
+        conn.commit()
+        if invalid:
+            print(f"  [WARN] {len(invalid)} layouts never validated (flagged for review): {invalid}")
+        for r in rows:
+            if r["layout"] is not None and db.get_region(conn, r["layout"]) is not None:
+                db.set_status(conn, r["path"], db.LOCATED)
+            else:
+                db.set_status(conn, r["path"], db.SKIP_NO_GOVERNOR, err="no region for layout")
+        conn.commit()
+    tel.add_images("locate", len(rows))
 
 
 def phase_mark(conn, box, limit, pool):
@@ -148,20 +157,22 @@ def phase_mark(conn, box, limit, pool):
         oval_rel = (reg["ox0"], reg["oy0"], reg["ox1"], reg["oy1"])
         tasks.append((r["path"], region_rel, oval_rel))
     print(f"[mark] scoring {len(tasks)} fronts on {N_CPU} workers")
-    n = 0
-    for out in pool.imap_unordered(_w_mark, tasks, chunksize=8):
-        if out[0] == "err":
-            db.set_status(conn, out[1], db.ERROR, err=f"mark: {out[2]}")
-        else:
-            _, path, oval, ink = out
-            db.upsert_result(conn, path, oval_fill_score=oval, line_ink_score=ink)
-            db.set_status(conn, path, db.SCORED)
-        n += 1
-        if n % 500 == 0:
-            conn.commit()
-            print(f"  scored {n}/{len(tasks)}")
-    conn.commit()
-    marked = stage3_mark.decide(conn, box)
+    with tel.stage_timer("mark"):
+        n = 0
+        for out in pool.imap_unordered(_w_mark, tasks, chunksize=8):
+            if out[0] == "err":
+                db.set_status(conn, out[1], db.ERROR, err=f"mark: {out[2]}")
+            else:
+                _, path, oval, ink = out
+                db.upsert_result(conn, path, oval_fill_score=oval, line_ink_score=ink)
+                db.set_status(conn, path, db.SCORED)
+            n += 1
+            if n % 500 == 0:
+                conn.commit()
+                print(f"  scored {n}/{len(tasks)}")
+        conn.commit()
+        marked = stage3_mark.decide(conn, box)
+    tel.add_images("mark", len(tasks))
     print(f"  done: {marked} write-in marks found (per-layout baseline)")
 
 
@@ -184,27 +195,30 @@ def phase_read(conn, box, limit, workers=READ_WORKERS):
         return
     print(f"[read] {len(rows)} marked write-ins via {stage4_read.MODEL} on {workers} workers")
     tasks = [(r["path"], r["crop_path"]) for r in rows]
-    n = 0
-    # Workers only do the network read; the main thread owns every DB write so
-    # SQLite never sees concurrent writers (same invariant as the CPU phases).
-    with cf.ThreadPoolExecutor(max_workers=workers) as ex:
-        for kind, path, payload in ex.map(_w_read, tasks):
-            if kind == "err":
-                db.set_status(conn, path, db.ERROR, err=f"read: {payload}")
-            else:
-                db.upsert_result(conn, path, vision_text=payload["text"],
-                                 vision_oval=payload["oval"], vision_conf=payload["conf"],
-                                 vision_model=stage4_read.MODEL)
-                db.set_status(conn, path, db.READ)
-            n += 1
-            if n % 20 == 0:
-                conn.commit()
-                print(f"  read {n}/{len(rows)}")
-    conn.commit()
+    with tel.stage_timer("read"):
+        n = 0
+        # Workers only do the network read; the main thread owns every DB write so
+        # SQLite never sees concurrent writers (same invariant as the CPU phases).
+        with cf.ThreadPoolExecutor(max_workers=workers) as ex:
+            for kind, path, payload in ex.map(_w_read, tasks):
+                if kind == "err":
+                    db.set_status(conn, path, db.ERROR, err=f"read: {payload}")
+                else:
+                    db.upsert_result(conn, path, vision_text=payload["text"],
+                                     vision_oval=payload["oval"], vision_conf=payload["conf"],
+                                     vision_model=stage4_read.MODEL)
+                    db.set_status(conn, path, db.READ)
+                n += 1
+                if n % 20 == 0:
+                    conn.commit()
+                    print(f"  read {n}/{len(rows)}")
+        conn.commit()
+    tel.add_images("read", len(rows))
 
 
 def phase_match(conn, box, limit):
-    stage5_match.main(["--box", box] if box else [])
+    with tel.stage_timer("match"):
+        stage5_match.main(["--box", box] if box else [])
 
 
 def main(argv=None):
@@ -219,28 +233,34 @@ def main(argv=None):
 
     db.init()
     conn = db.connect()
+    tel.init(CONFIG)
 
-    if args.phase in ("classify", "mark", "all"):
-        with mp.Pool(N_CPU) as pool:
-            if args.phase in ("classify", "all"):
-                phase_classify(conn, args.box, args.limit, pool)
-            if args.phase in ("all",):
+    try:
+        with tel.span("run", phase=args.phase, box=args.box or "all"):
+            if args.phase in ("classify", "mark", "all"):
+                with mp.Pool(N_CPU) as pool:
+                    if args.phase in ("classify", "all"):
+                        phase_classify(conn, args.box, args.limit, pool)
+                    if args.phase in ("all",):
+                        phase_locate(conn, args.box, args.limit)
+                    if args.phase in ("mark", "all"):
+                        phase_mark(conn, args.box, args.limit, pool)
+            if args.phase == "locate":
                 phase_locate(conn, args.box, args.limit)
-            if args.phase in ("mark", "all"):
-                phase_mark(conn, args.box, args.limit, pool)
-    if args.phase == "locate":
-        phase_locate(conn, args.box, args.limit)
-    if args.phase in ("read", "all"):
-        phase_read(conn, args.box, args.limit, workers=args.read_workers)
-    if args.phase in ("match", "all"):
-        phase_match(conn, args.box, args.limit)
+            if args.phase in ("read", "all"):
+                phase_read(conn, args.box, args.limit, workers=args.read_workers)
+            if args.phase in ("match", "all"):
+                phase_match(conn, args.box, args.limit)
 
-    print("status:", db.counts_by_status(conn))
-    # Guardrail: a full run with no box filter is a complete tally, so reconcile
-    # it against the official county aggregate and warn on large divergence.
-    if args.phase in ("match", "all") and not args.box:
-        from . import reconcile
-        reconcile.check(conn)
+        print("status:", db.counts_by_status(conn))
+        # Guardrail: a full run with no box filter is a complete tally, so reconcile
+        # it against the official county aggregate and warn on large divergence.
+        if args.phase in ("match", "all") and not args.box:
+            from . import reconcile
+            reconcile.check(conn)
+    finally:
+        # Flush metrics/spans before exit so a batch run actually exports.
+        tel.shutdown()
 
 
 if __name__ == "__main__":

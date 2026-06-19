@@ -13,6 +13,14 @@ authors = [{ name = "Edwin Knuth" }]
 keywords = ["elections", "ocr", "ballots", "write-in", "vision", "ollama"]
 dependencies = ["pillow>=10.0", "numpy>=1.24"]
 
+[project.optional-dependencies]
+# Telemetry is optional: without these, [telemetry] is a graceful no-op.
+telemetry = [
+    "opentelemetry-api>=1.20",
+    "opentelemetry-sdk>=1.20",
+    "opentelemetry-exporter-otlp-proto-http>=1.20",
+]
+
 [project.urls]
 Homepage = "https://github.com/eknuth/writein-count"
 

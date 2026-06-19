@@ -104,6 +104,30 @@ python -m pencilcount.stage5_match --rescore   # recompute matches from stored r
 python -m pencilcount.reconcile                 # cross-check vs official totals
 ```
 
+## Telemetry (optional)
+
+The pipeline can emit OpenTelemetry metrics and traces so you can watch
+performance live. It is off by default and a no-op unless you opt in.
+
+```bash
+pip install -e ".[telemetry]"          # optional deps
+# point at your collector (e.g. a local SigNoz)
+export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
+WRITEIN_TELEMETRY=1 python -m pencilcount.run all
+```
+
+Or configure it under `[telemetry]` in your config (endpoint, headers, console
+output, OTLP on/off). What it captures:
+
+- **`writein.vision.read.latency`** — per-call vision transcription latency (ms histogram)
+- **`writein.stage.duration`** + **`writein.images.processed`** — wall-clock and throughput per phase
+- **`writein.images.by_status`** / **`writein.match.by_result`** — the funnel and tally as live gauges
+- **`writein.locate.cache`** — layout-region cache hit vs miss (the locate-once win)
+- **`writein.vision.inflight`** — concurrent in-flight vision reads
+
+Without the optional deps installed, or with `enabled = false`, none of this runs
+and the pipeline behaves exactly as before.
+
 ## A note on data
 
 This repository is **code only**. No ballot images, no database, no per-ballot
